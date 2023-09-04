@@ -32,34 +32,27 @@ class HeadHunter(Engine):
         response = requests.get(self.url, params=self.params)
         if response.status_code != 200:
             raise ParsingError(f"Ошибка получения вакансий! Статус: {response.status_code}")
-        return response.json()
+        return response.json()["items"]
 
     def get_formatted_vacancies(self):
         formatted_vacancies = []
-        #currencies = get_currencies()
-        sj_currencies = {
-            "rub": "RUR",
-            "uah": "UAH",
-            "uzs": "UZS"
-        }
+        currencies = get_currencies()
         for vacancy in self.vacancies:
+            currency_value =1
+            if vacancy["salary"]:
+                currency_value = currencies.get(vacancy["salary"].get("currency", None), 1)
+
             formatted_vacancy = {
                 "employer": vacancy["employer"],
                 "title": vacancy["name"],
                 "url": vacancy["url"],
                 "api": "HeadHunter",
-                "salary_from": vacancy['salary']['from'] if vacancy['salary'] else None,
-                "salary_to": vacancy["salary"]['to'] if vacancy['salary'] else None,
+                "salary_from": vacancy['salary']['from'] if isinstance(vacancy["salary"], dict) and vacancy["salary"]['from'] else 0,
+                "salary_to": vacancy["salary"]['to'] if isinstance(vacancy["salary"], dict) and vacancy["salary"]['to'] else 0,
+                "currency": vacancy["salary"]["currency"] if vacancy['salary'] else 0,
+                "currency_value": currency_value
+                #"currency_value": currencies[vacancy["salary"]["currency"]] if vacancy["salary"]["currency"] in currencies else 1
             }
-            #if vacancy["currency"] in sj_currencies:
-            #    formatted_vacancy["currency"] = sj_currencies[vacancy["currency"]]
-            #    formatted_vacancy["currency_value"] = currencies[sj_currencies[vacancy["currency"]]] if sj_currencies[vacancy["currency"]] in currencies else 1
-            #elif vacancy["currency"]:
-            #    formatted_vacancy["currency"] = "RUR"
-            #    formatted_vacancy["currency_value"] = 1
-            #else:
-            #    formatted_vacancy["currency"] = None
-            #    formatted_vacancy["currency_value"] = None
 
             formatted_vacancies.append(formatted_vacancy)
 
@@ -105,7 +98,7 @@ class SuperJob(Engine):
 
     def get_formatted_vacancies(self):
         formatted_vacancies = []
-        #currencies = get_currencies()
+        currencies = get_currencies()
         sj_currencies = {
             "rub": "RUR",
             "uah": "UAH",
@@ -117,17 +110,18 @@ class SuperJob(Engine):
                 "title": vacancy["profession"],
                 "url": vacancy["link"],
                 "api": "SuperJob",
-                "salary_from": vacancy["payment_from"] if vacancy["payment_from"] and vacancy["payment_from"] != 0 else None,
-                "salary_to": vacancy["payment_to"] if vacancy["payment_to"] and vacancy["payment_to"] != 0 else None
+                "salary_from": vacancy["payment_from"] if vacancy["payment_from"] and vacancy["payment_from"] != 0 else 0,
+                "salary_to": vacancy["payment_to"] if vacancy["payment_to"] and vacancy["payment_to"] != 0 else 0
             }
-            #   formatted_vacancy["currency"] = sj_currencies[vacancy["currency"]]
-            #    formatted_vacancy["currency_value"] = currencies[sj_currencies[vacancy["currency"]]] if sj_currencies[vacancy["currency"]] in currencies else 1
-            #elif vacancy["currency"]:
-             #   formatted_vacancy["currency"] = "RUR"
-            #    formatted_vacancy["currency_value"] = 1
-            #else:
-            #    formatted_vacancy["currency"] = None
-            #    formatted_vacancy["currency_value"] = None
+            if vacancy["currency"] in sj_currencies:
+                formatted_vacancy["currency"] = sj_currencies[vacancy["currency"]]
+                formatted_vacancy["currency_value"] = currencies[sj_currencies[vacancy["currency"]]] if sj_currencies[vacancy["currency"]] in currencies else 1
+            elif vacancy["currency"]:
+                formatted_vacancy["currency"] = "RUR"
+                formatted_vacancy["currency_value"] = 1
+            else:
+                formatted_vacancy["currency"] = None
+                formatted_vacancy["currency_value"] = None
 
             formatted_vacancies.append(formatted_vacancy)
 
@@ -152,7 +146,7 @@ class SuperJob(Engine):
 
 class Vacancy:
     def __init__(self, vacancy):
-        self.employer = vacancy["employer"]
+        self.employer = vacancy["employer"]["name"] if isinstance(vacancy["employer"], dict) else vacancy["employer"]
         self.title = vacancy["title"]
         self.url = vacancy["url"]
         self.api = vacancy["api"]
@@ -164,6 +158,47 @@ class Vacancy:
     def __str__(self):
         if not self.salary_from and not self.salary_to:
             salary = "Не указана"
+        else:
+            salary_from, salary_to = "", ""
+            if self.salary_from:
+                salary_from = f"от {self.salary_from} {self.currency}"
+                if self.currency != "RUR":
+                    salary_from += f" ({round(self.salary_from * self.currency_value, 2)} RUR)"
+            if self.salary_to:
+                salary_to = f"до {self.salary_to} {self.currency}"
+                if self.currency != "RUR":
+                    salary_to += f" ({round(self.salary_to * self.currency_value, 2)} RUR)"
+            salary = " ".join([salary_from, salary_to]).strip()
+        return f"""
+            Работодатель: \"{self.employer}\"
+            Вакансия: \"{self.title}\"
+            Зарплата: {salary}
+            Ссылка: {self.url}    
+            """
+
+    def __gt__(self, other):
+        if self.currency != "RUR":
+            avg_salary_self = (self.salary_from + self.salary_to) * self.currency_value / 2
+        else:
+            avg_salary_self = (self.salary_from + self.salary_to) / 2
+
+        if other.currency != "RUR":
+            avg_salary_other= (other.salary_from + other.salary_to) * other.currency_value / 2
+        else:
+            avg_salary_other = (other.salary_from + other.salary_to) / 2
+        return avg_salary_self > avg_salary_other
+
+    def __lt__(self, other):
+        if self.currency != "RUR":
+            avg_salary_self = (self.salary_from + self.salary_to) * self.currency_value / 2
+        else:
+            avg_salary_self = (self.salary_from + self.salary_to) / 2
+
+        if other.currency != "RUR":
+            avg_salary_other = (other.salary_from + other.salary_to) * other.currency_value / 2
+        else:
+            avg_salary_other = (other.salary_from + other.salary_to) / 2
+        return avg_salary_self < avg_salary_other
 
 
 class Connector:
@@ -178,6 +213,8 @@ class Connector:
         with open(self.filename, "r", encoding="utf-8") as file:
             vacancies = json.load(file)
         return [Vacancy(x) for x in vacancies]
+
+
 
 
 
