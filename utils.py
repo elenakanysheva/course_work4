@@ -1,22 +1,4 @@
-import requests
-from exception import ParsingError
-
-
 def get_currencies():
-    # response = requests.get("https://www.cbr.ru/scripts/XML_daily.asp")
-    # try:
-    #    if response.status_code != 200:
-    #        raise ParsingError(f"Ошибка получения курса валют! Статус: {response.status_code}")
-    #    print(response.content)
-    #    currencies = response.content
-    #    formatted_currencies = {}
-    #    for currency in currencies["ValCurs"]["Valute"]:
-    #        value = float(currency["Value"].replace(",", "."))
-    #        nominal = float(currency["Nominal"])
-    #    formatted_currencies["RUR"] = 1
-    #    return formatted_currencies
-    # except ParsingError as error:
-    #    print(error)
     return {
         "AUD": 52.2056,
         "AZN": 47.0495,
@@ -67,3 +49,12 @@ def get_currencies():
 
 def sort_by_salary_from_desc(vacancies_list):
     return sorted(vacancies_list, reverse=True)
+
+
+def calculate_avg(currency, salary_from, salary_to, currency_value):
+    if currency != "RUR":
+        avg_salary = (salary_from + salary_to) * currency_value / 2
+    else:
+        avg_salary = (salary_from + salary_to) / 2
+
+    return avg_salary

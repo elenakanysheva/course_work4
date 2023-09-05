@@ -4,13 +4,13 @@ from utils import sort_by_salary_from_desc
 
 def main():
     vacancies_json = []
-    #keyword = input("Введите ключевое слово для поиска: ")
-    keyword = "Python"
+    keyword = input("Введите ключевое слово для поиска: ")
+
 # Создание экземпляра класса для работы с API сайтов с вакансиями
     sj = SuperJob(keyword)
     hh = HeadHunter(keyword)
 
-    for api in (hh,sj):
+    for api in (hh, sj):
         api.get_vacancies(pages_count=10)
         vacancies_json.extend(api.get_formatted_vacancies())
 
@@ -18,7 +18,7 @@ def main():
     connector.insert(vacancies_json=vacancies_json)
     all_vacancies = connector.select()
 
-    vacancies =[]
+    vacancies = []
     while True:
         command = input(
             "1 - Вывести списек вакансий;\n"
